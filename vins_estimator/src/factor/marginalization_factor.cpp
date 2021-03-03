@@ -302,6 +302,7 @@ void MarginalizationInfo::marginalize()
     Eigen::VectorXd S_inv_sqrt = S_inv.cwiseSqrt();
 
     linearized_jacobians = S_sqrt.asDiagonal() * saes2.eigenvectors().transpose();
+    std::cout<<"linearized_jacobians"<<linearized_jacobians.rows()<<" "<<linearized_jacobians.cols()<<std::endl;
     linearized_residuals = S_inv_sqrt.asDiagonal() * saes2.eigenvectors().transpose() * b;
     //std::cout << A << std::endl
     //          << std::endl;
@@ -316,17 +317,29 @@ std::vector<double *> MarginalizationInfo::getParameterBlocks(std::unordered_map
     keep_block_size.clear();
     keep_block_idx.clear();
     keep_block_data.clear();
-
+    std::ostringstream pra_block_data_str;
+    std::ostringstream addr_shift_data_str;
     for (const auto &it : parameter_block_idx)
     {
         if (it.second >= m)
         {
+            std::cout<<it.first<<std::endl;
             keep_block_size.push_back(parameter_block_size[it.first]);
             keep_block_idx.push_back(parameter_block_idx[it.first]);
             keep_block_data.push_back(parameter_block_data[it.first]);
+            pra_block_data_str
+                << "parameter_block_data[it.first]"
+                << reinterpret_cast<long>(parameter_block_data[it.first])
+                << std::endl;
+            addr_shift_data_str << "addr_shirf[it.first]"
+                                << reinterpret_cast<long>(addr_shift[it.first])
+                                << std::endl;
+
             keep_block_addr.push_back(addr_shift[it.first]);
         }
     }
+    std::cout<<pra_block_data_str.str();
+    std::cout<<addr_shift_data_str.str();
     sum_block_size = std::accumulate(std::begin(keep_block_size), std::end(keep_block_size), 0);
 
     return keep_block_addr;
@@ -378,9 +391,10 @@ bool MarginalizationFactor::Evaluate(double const *const *parameters, double *re
     Eigen::Map<Eigen::VectorXd>(residuals, n) = marginalization_info->linearized_residuals + marginalization_info->linearized_jacobians * dx;
     if (jacobians)
     {
-
+        std::ostringstream print_str;
         for (int i = 0; i < static_cast<int>(marginalization_info->keep_block_size.size()); i++)
         {
+            print_str<<"i =" <<i<<" ";
             if (jacobians[i])
             {
                 int size = marginalization_info->keep_block_size[i], local_size = marginalization_info->localSize(size);
@@ -388,8 +402,13 @@ bool MarginalizationFactor::Evaluate(double const *const *parameters, double *re
                 Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> jacobian(jacobians[i], n, size);
                 jacobian.setZero();
                 jacobian.leftCols(local_size) = marginalization_info->linearized_jacobians.middleCols(idx, local_size);
+                print_str<<"idx  = "<<idx;
+                print_str<<"size  = "<<size;
+                print_str<<"jacobian"<<jacobian.rows()<<" "<<jacobian.cols()<<std::endl;
             }
+            
         }
+        std::cout<<print_str.str();
     }
     return true;
 }

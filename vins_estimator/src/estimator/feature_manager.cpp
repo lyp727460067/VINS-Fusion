@@ -48,74 +48,69 @@ int FeatureManager::getFeatureCount()
     return cnt;
 }
 
-
-bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
-{
-    ROS_DEBUG("input feature: %d", (int)image.size());
-    ROS_DEBUG("num of feature: %d", getFeatureCount());
-    double parallax_sum = 0;
-    int parallax_num = 0;
-    last_track_num = 0;
-    last_average_parallax = 0;
-    new_feature_num = 0;
-    long_track_num = 0;
-    for (auto &id_pts : image)
-    {
-        FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
-        assert(id_pts.second[0].first == 0);
-        if(id_pts.second.size() == 2)
-        {
-            f_per_fra.rightObservation(id_pts.second[1].second);
-            assert(id_pts.second[1].first == 1);
-        }
-
-        int feature_id = id_pts.first;
-        auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
-                          {
-            return it.feature_id == feature_id;
-                          });
-
-        if (it == feature.end())
-        {
-            feature.push_back(FeaturePerId(feature_id, frame_count));
-            feature.back().feature_per_frame.push_back(f_per_fra);
-            new_feature_num++;
-        }
-        else if (it->feature_id == feature_id)
-        {
-            it->feature_per_frame.push_back(f_per_fra);
-            last_track_num++;
-            if( it-> feature_per_frame.size() >= 4)
-                long_track_num++;
-        }
+bool FeatureManager::addFeatureCheckParallax(
+    int frame_count,
+    const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image,
+    double td) {
+  ROS_DEBUG("input feature: %d", (int)image.size());
+  ROS_DEBUG("num of feature: %d", getFeatureCount());
+  double parallax_sum = 0;
+  int parallax_num = 0;
+  last_track_num = 0;
+  last_average_parallax = 0;
+  new_feature_num = 0;
+  long_track_num = 0;
+  for (auto &id_pts : image) {
+    FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
+    assert(id_pts.second[0].first == 0);
+    if (id_pts.second.size() == 2) {
+      f_per_fra.rightObservation(id_pts.second[1].second);
+      assert(id_pts.second[1].first == 1);
     }
 
-    //if (frame_count < 2 || last_track_num < 20)
-    //if (frame_count < 2 || last_track_num < 20 || new_feature_num > 0.5 * last_track_num)
-    if (frame_count < 2 || last_track_num < 20 || long_track_num < 40 || new_feature_num > 0.5 * last_track_num)
-        return true;
+    int feature_id = id_pts.first;
+    auto it = find_if(feature.begin(), feature.end(),
+                      [feature_id](const FeaturePerId &it) {
+                        return it.feature_id == feature_id;
+                      });
 
-    for (auto &it_per_id : feature)
-    {
-        if (it_per_id.start_frame <= frame_count - 2 &&
-            it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
-        {
-            parallax_sum += compensatedParallax2(it_per_id, frame_count);
-            parallax_num++;
-        }
+    if (it == feature.end()) {
+      feature.push_back(FeaturePerId(feature_id, frame_count));
+      feature.back().feature_per_frame.push_back(f_per_fra);
+      new_feature_num++;
+    } else if (it->feature_id == feature_id) {
+      it->feature_per_frame.push_back(f_per_fra);
+      last_track_num++;
+      if (it->feature_per_frame.size() >= 4) long_track_num++;
     }
+  }
 
-    if (parallax_num == 0)
-    {
-        return true;
+  // if (frame_count < 2 || last_track_num < 20)
+  // if (frame_count < 2 || last_track_num < 20 || new_feature_num > 0.5 *
+  // last_track_num)
+  if (frame_count < 2 || last_track_num < 20 || long_track_num < 40 ||
+      new_feature_num > 0.5 * last_track_num)
+    return true;
+
+  for (auto &it_per_id : feature) {
+    if (it_per_id.start_frame <= frame_count - 2 &&
+        it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >=
+            frame_count - 1) {
+      parallax_sum += compensatedParallax2(it_per_id, frame_count);
+      parallax_num++;
     }
-    else
-    {
-        ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
-        ROS_DEBUG("current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
-        last_average_parallax = parallax_sum / parallax_num * FOCAL_LENGTH;
-        return parallax_sum / parallax_num >= MIN_PARALLAX;
-    }
+  }
+
+  if (parallax_num == 0) {
+    return true;
+  } else {
+    ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum,
+              parallax_num);
+    ROS_DEBUG("current parallax: %lf",
+              parallax_sum / parallax_num * FOCAL_LENGTH);
+    last_average_parallax = parallax_sum / parallax_num * FOCAL_LENGTH;
+    return parallax_sum / parallax_num >= MIN_PARALLAX;
+  }
 }
 
 vector<pair<Vector3d, Vector3d>> FeatureManager::getCorresponding(int frame_count_l, int frame_count_r)
@@ -334,6 +329,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             Eigen::Vector3d localPoint;
             localPoint = leftPose.leftCols<3>() * point3d + leftPose.rightCols<1>();
             double depth = localPoint.z();
+           // std::cout<<"depth"<<depth<<std::endl;
             if (depth > 0)
                 it_per_id.estimated_depth = depth;
             else
@@ -348,6 +344,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
         else if(it_per_id.feature_per_frame.size() > 1)
         {
             int imu_i = it_per_id.start_frame;
+            
             Eigen::Matrix<double, 3, 4> leftPose;
             Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
             Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
